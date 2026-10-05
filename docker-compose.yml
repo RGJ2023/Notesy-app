@@ -1,0 +1,39 @@
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - SECRET_KEY=dev-secret-key-notesy-local
+      - DEBUG=True
+      - ALLOWED_HOSTS=localhost 127.0.0.1 0.0.0.0 web
+      - DATABASE_URL=postgres://notesy_user:notesy_pass@db:5432/notesy_db
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py seed || true &&
+             gunicorn --bind 0.0.0.0:8000 --workers 2 notesy.wsgi:application"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=notesy_db
+      - POSTGRES_USER=notesy_user
+      - POSTGRES_PASSWORD=notesy_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notesy_user -d notesy_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
