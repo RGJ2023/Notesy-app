@@ -6,7 +6,6 @@ on:
 
 permissions:
   contents: read
-  
 
 jobs:
   gitleaks:
@@ -23,8 +22,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  test:
-    name: Run Tests & Coverage
+  test-and-sonar:
+    name: Run Tests & SonarCloud Scan
     runs-on: ubuntu-latest
     needs: gitleaks
 
@@ -51,6 +50,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -62,7 +63,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
 
       - name: Install Node dependencies & build assets
         run: |
@@ -81,3 +81,9 @@ jobs:
       - name: Run pytest with Coverage
         run: |
           pytest --cov=. --cov-report=xml
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
