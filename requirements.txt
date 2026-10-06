@@ -7,4 +7,4 @@ pytest
 pytest-django
 dj-database-url
 urllib3>=2.2.0
-requests>=2.31.0
+
