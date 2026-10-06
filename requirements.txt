@@ -6,4 +6,6 @@ python-dotenv
 pytest
 pytest-django
 dj-database-url
-urllib3>=2.2.0
+urllib3>=2.8.0
+msgpack>=1.2.1
+setuptools>=78.1.1
