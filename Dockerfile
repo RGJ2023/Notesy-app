@@ -18,6 +18,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# 1. Upgrade OS packages to fix base image vulnerabilities (e.g., libpcre2)
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
+# 2. Upgrade pip and setuptools before installing app dependencies
+RUN pip install --no-cache-dir --upgrade pip setuptools
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
