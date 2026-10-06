@@ -1,10 +1,9 @@
 django
 gunicorn
 psycopg2-binary
-requests==2.20.0
+requests>=2.31.0
 python-dotenv
 pytest
 pytest-django
 dj-database-url
 urllib3>=2.2.0
-
