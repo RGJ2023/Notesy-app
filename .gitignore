@@ -1,0 +1,42 @@
+# Environment & Secrets (NEVER commit secrets)
+.env
+.env.*
+!.env.example
+
+# Python / Virtual Environment
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+
+# Django static & media uploads
+/staticfiles/
+/media/
+
+# Database
+*.sqlite3
+
+# Node / Frontend Build
+node_modules/
+/static/dist/
+
+# Testing & Coverage
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
