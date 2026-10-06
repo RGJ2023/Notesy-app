@@ -7,6 +7,9 @@ on:
 permissions:
   contents: read
 
+env:
+  SONAR_PROJECT_KEY: "your_real_project_key_here"
+  SONAR_ORGANIZATION: "your_real_organization_here"
 
 jobs:
   gitleaks:
@@ -90,10 +93,10 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >
-            -Dsonar.projectKey=your_actual_project_key
-            -Dsonar.organization=your_actual_organization_key
+            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
+            -Dsonar.organization=${{ env.SONAR_ORGANIZATION }}
             -Dsonar.sources=.
             -Dsonar.exclusions=**/migrations/**,**/node_modules/**,**/staticfiles/**,**/static/**
             -Dsonar.tests=.
             -Dsonar.test.inclusions=**/test_*.py,**/*_test.py,**/tests.py
-            -Dsonar.python.coverage.reportPaths=coverage.xml  
+            -Dsonar.python.coverage.reportPaths=coverage.xml
