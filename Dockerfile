@@ -26,7 +26,7 @@ RUN pip install --no-cache-dir --upgrade pip "setuptools>=78.1.1" "urllib3>=2.8.
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
-    && pip uninstall -y pip setuptools wheel
+      && pip uninstall -y pip setuptools wheel
 
 # Copy backend source
 COPY . .
