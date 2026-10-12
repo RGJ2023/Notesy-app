@@ -134,7 +134,7 @@ jobs:
           
   build-and-push-ecr:
     name: Build & Push to Amazon ECR
-    needs: test-and-scan
+    needs: docker-trivy-scan
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
 
