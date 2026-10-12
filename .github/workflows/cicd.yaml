@@ -6,11 +6,39 @@ on:
 
 permissions:
   contents: read
-  id-token: write   # required for OIDC
+  id-token: write   # required for AWS OIDC
 
+# ---------------------------------------------------------------------------
+# All environment variables live here, pulled dynamically from GitHub
+# secrets/variables. Reference them below as ${{ env.NAME }}.
+# ---------------------------------------------------------------------------
 env:
-  SONAR_PROJECT_KEY: "your_real_project_key_here"
-  SONAR_ORGANIZATION: "your_real_organization_here"
+  # --- SonarQube Cloud ---
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}                  # secret
+  SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}         # variable
+  SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}       # variable
+
+  # --- AWS / ECR ---
+  AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}    # secret (full role ARN)
+  AWS_REGION: ${{ vars.AWS_REGION }}                       # variable
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}               # variable
+
+  # --- Docker image ---
+  IMAGE_NAME: ${{ vars.IMAGE_NAME }}                       # variable
+  IMAGE_TAG_LOCAL: ${{ vars.IMAGE_TAG_LOCAL }}             # variable
+
+  # --- Runtime versions ---
+  PYTHON_VERSION: ${{ vars.PYTHON_VERSION }}               # variable
+  NODE_VERSION: ${{ vars.NODE_VERSION }}                   # variable
+
+  # --- Test database ---
+  POSTGRES_DB: ${{ vars.POSTGRES_DB }}                     # variable
+  POSTGRES_USER: ${{ vars.POSTGRES_USER }}                 # variable
+  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}      # secret
+
+  # --- Django test settings ---
+  SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}             # secret
+  DEBUG: ${{ vars.DEBUG }}                                 # variable
 
 jobs:
   gitleaks:
@@ -36,9 +64,9 @@ jobs:
       postgres:
         image: postgres:15-alpine
         env:
-          POSTGRES_DB: notesy_test_db
-          POSTGRES_USER: notesy_user
-          POSTGRES_PASSWORD: notesy_pass
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
         ports:
           - 5432:5432
         options: >-
@@ -48,9 +76,8 @@ jobs:
           --health-retries 5
 
     env:
-      SECRET_KEY: ci-test-secret-key
-      DEBUG: "False"
-      DATABASE_URL: postgres://notesy_user:notesy_pass@localhost:5432/notesy_test_db
+      # job-level env can't read the env context, so build this from vars/secrets
+      DATABASE_URL: postgres://${{ vars.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/${{ vars.POSTGRES_DB }}
 
     steps:
       - name: Checkout code
@@ -61,13 +88,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install Node dependencies & build assets
         run: |
@@ -80,27 +107,25 @@ jobs:
           pip install -r requirements.txt pytest-cov
 
       - name: Run database migrations
-        run: |
-          python manage.py migrate
+        run: python manage.py migrate
 
-      - name: Run pytest with Coverage
-        run: |
-          pytest --cov=. --cov-report=xml
+      - name: Run pytest with coverage
+        run: pytest --cov=. --cov-report=xml
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v5
-        
+        # SONAR_TOKEN comes from the workflow-level env above
         with:
           args: >
-            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
-            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
+            -Dsonar.organization=${{ env.SONAR_ORGANIZATION }}
             -Dsonar.sources=.
             -Dsonar.exclusions=**/migrations/**,**/node_modules/**,**/staticfiles/**,**/static/**
             -Dsonar.tests=.
             -Dsonar.test.inclusions=**/test_*.py,**/*_test.py,**/tests.py
             -Dsonar.python.coverage.reportPaths=coverage.xml
 
-  Docker-trivy-scan:
+  docker-trivy-scan:
     name: Container Vulnerability Scan (Trivy)
     runs-on: ubuntu-latest
     needs: test-and-sonar
@@ -112,25 +137,26 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker Image
+      - name: Build Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           load: true
-          tags: notesy-app:latest
+          tags: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG_LOCAL }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Run Trivy Vulnerability Scanner
+      - name: Run Trivy vulnerability scanner
+        # TODO: pin to a release tag or commit SHA instead of @master
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'notesy-app:latest'
-          format: 'table'
-          exit-code: '1'
+          image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG_LOCAL }}
+          format: table
+          exit-code: "1"
           ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-          
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+
   build-and-push-ecr:
     name: Build & Push to Amazon ECR
     needs: docker-trivy-scan
@@ -138,31 +164,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials via OIDC
+      - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, Tag, and Push Docker Image
+      - name: Build, tag, and push Docker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          # Build image with git commit SHA tag and latest tag
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-          
-          # Push both tags to ECR
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker build \
+            -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+            -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" .
+
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
 
           echo "Pushed image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-  
